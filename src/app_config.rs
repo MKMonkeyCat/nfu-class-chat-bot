@@ -3,7 +3,11 @@ use notify::{Event, RecursiveMode, Watcher};
 use serde::Deserialize;
 use serenity::prelude::RwLock;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::time;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
@@ -104,24 +108,24 @@ pub fn load_app_config() -> Result<AppConfig, ConfigError> {
 
 pub fn spawn_config_hot_reload(config: Arc<RwLock<AppConfig>>) {
     tokio::spawn(async move {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let (tx, mut rx) = mpsc::channel(1);
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
             if let Ok(event) = res {
                 if event.kind.is_modify() {
-                    let _ = tx.blocking_send(());
+                    let _ = tx.try_send(());
                 }
             }
         })
         .expect("create file watcher failed");
 
         watcher
-            .watch(
-                std::path::Path::new("config.toml"),
-                RecursiveMode::NonRecursive,
-            )
+            .watch(Path::new("config.toml"), RecursiveMode::NonRecursive)
             .expect("listening config.toml failed");
 
         while let Some(_) = rx.recv().await {
+            time::sleep(Duration::from_millis(100)).await;
+
+            while let Ok(_) = rx.try_recv() {}
             if let Ok(new_cfg) = load_app_config() {
                 let mut write_guard = config.write().await;
                 *write_guard = new_cfg;
