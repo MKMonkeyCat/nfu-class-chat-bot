@@ -1,0 +1,113 @@
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: class-chat-bot-secret
+#   namespace: class-chat-bot
+# type: Opaque
+# stringData:
+#   DISCORD_TOKEN: "replace-with-your-discord-token"
+# ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: class-chat-bot
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: class-chat-bot-config
+  namespace: class-chat-bot
+data:
+  config.toml: |
+    [roles]
+    admin_roles = [1234567890123456789]
+    local_role = 1234567890123456789
+    senior_role = 1234567890123456789
+    teacher_role = 1234567890123456789
+    guest_role = 1234567890123456789
+    verified_role = 1234567890123456789
+
+    [class_students]
+    40000001 = "學生姓名 A"
+    40000002 = "學生姓名 B"
+
+    [link_chat]
+    enabled = true
+    bind = "0.0.0.0:8080"
+    cache_ttl_seconds = 300
+    line_channel_secret = "YOUR_LINE_CHANNEL_SECRET"
+    line_channel_access_token = "YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+
+    [link_chat.group_mapping."*"]
+    dc_channel_id = 1234567890123456789
+    webhook_url = "https://discord.com/api/webhooks/..."
+    message_template = "{name} ({group}): {message}"
+    webhook_avatar_url = "https://example.com/avatar.png"
+    webhook_name_template = "{name} ({group})"
+    webhook_message_template = "{message}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: class-chat-bot
+  namespace: class-chat-bot
+  labels:
+    app: class-chat-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: class-chat-bot
+  template:
+    metadata:
+      labels:
+        app: class-chat-bot
+    spec:
+      containers:
+        - name: class-chat-bot
+          image: class-chat-bot:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          env:
+            - name: DISCORD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: class-chat-bot-secret
+                  key: DISCORD_TOKEN
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/config.toml
+              readOnly: true
+              subPath: config.toml
+      volumes:
+        - name: app-config
+          configMap:
+            name: class-chat-bot-config
+            items:
+              - key: config.toml
+                path: config.toml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: class-chat-bot
+  namespace: class-chat-bot
+  labels:
+    app: class-chat-bot
+spec:
+  selector:
+    app: class-chat-bot
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP
