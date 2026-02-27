@@ -7,44 +7,44 @@
 # stringData:
 #   DISCORD_TOKEN: "replace-with-your-discord-token"
 # ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: class-chat-bot-config
+#   namespace: class-chat-bot
+# data:
+#   config.toml: |
+#     [roles]
+#     admin_roles = [1234567890123456789]
+#     local_role = 1234567890123456789
+#     senior_role = 1234567890123456789
+#     teacher_role = 1234567890123456789
+#     guest_role = 1234567890123456789
+#     verified_role = 1234567890123456789
+
+#     [class_students]
+#     40000001 = "學生姓名 A"
+#     40000002 = "學生姓名 B"
+
+#     [link_chat]
+#     enabled = true
+#     bind = "0.0.0.0:8080"
+#     cache_ttl_seconds = 300
+#     line_channel_secret = "YOUR_LINE_CHANNEL_SECRET"
+#     line_channel_access_token = "YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+
+#     [link_chat.group_mapping."*"]
+#     dc_channel_id = 1234567890123456789
+#     webhook_url = "https://discord.com/api/webhooks/..."
+#     message_template = "{name} ({group}): {message}"
+#     webhook_avatar_url = "https://example.com/avatar.png"
+#     webhook_name_template = "{name} ({group})"
+#     webhook_message_template = "{message}"
+# ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: class-chat-bot
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: class-chat-bot-config
-  namespace: class-chat-bot
-data:
-  config.toml: |
-    [roles]
-    admin_roles = [1234567890123456789]
-    local_role = 1234567890123456789
-    senior_role = 1234567890123456789
-    teacher_role = 1234567890123456789
-    guest_role = 1234567890123456789
-    verified_role = 1234567890123456789
-
-    [class_students]
-    40000001 = "學生姓名 A"
-    40000002 = "學生姓名 B"
-
-    [link_chat]
-    enabled = true
-    bind = "0.0.0.0:8080"
-    cache_ttl_seconds = 300
-    line_channel_secret = "YOUR_LINE_CHANNEL_SECRET"
-    line_channel_access_token = "YOUR_LINE_CHANNEL_ACCESS_TOKEN"
-
-    [link_chat.group_mapping."*"]
-    dc_channel_id = 1234567890123456789
-    webhook_url = "https://discord.com/api/webhooks/..."
-    message_template = "{name} ({group}): {message}"
-    webhook_avatar_url = "https://example.com/avatar.png"
-    webhook_name_template = "{name} ({group})"
-    webhook_message_template = "{message}"
 ---
 apiVersion: apps/v1
 kind: Deployment
