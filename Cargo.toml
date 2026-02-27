@@ -1,0 +1,47 @@
+[package]
+name = "class-chat-bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+config = "0.15.19"
+dotenv = "0.15.0"
+notify = "8.2.0"
+serde = "1.0.228"
+serde_json = "1.0.145"
+serenity = { version = "0.12", default-features = false, features = [
+  "builder",
+  "cache",
+  "client",
+  "gateway",
+  "http",
+  "model",
+  "rustls_backend",
+] }
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+axum = { version = "0.8.4", features = ["http1", "json", "tokio"] }
+hmac = "0.12.1"
+sha2 = "0.10.9"
+base64 = "0.22.1"
+reqwest = { version = "0.12.23", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "multipart",
+] }
+chrono = { version = "0.4.42", default-features = true }
+sea-orm = { version = "1.1", features = [
+  "runtime-tokio-rustls",
+  "sqlx-sqlite",
+  "macros",
+] }
+
+[profile.dev]
+debug = 0
+incremental = true
+codegen-units = 256
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+# panic = "abort"
