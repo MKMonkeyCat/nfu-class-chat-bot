@@ -65,7 +65,7 @@ spec:
     spec:
       containers:
         - name: class-chat-bot
-          image: docker pull ghcr.io/mkmonkeycat/nfu-class-chat-bot:latest
+          image: ghcr.io/mkmonkeycat/nfu-class-chat-bot:latest
           ports:
             - containerPort: 8080
               name: http
