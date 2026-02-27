@@ -1,0 +1,10 @@
+/target
+
+Dockerfile
+.dockerignore
+.git
+.gitignore
+
+.env
+config.toml
+db.db

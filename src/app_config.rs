@@ -11,6 +11,17 @@ use tokio::time;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
+    pub roles: RoleConfig,
+
+    #[serde(default)]
+    pub class_students: HashMap<String, String>,
+
+    #[serde(default)]
+    pub link_chat: LinkChatConfig,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RoleConfig {
     #[serde(default)]
     pub admin_roles: Vec<u64>,
 
@@ -19,12 +30,6 @@ pub struct AppConfig {
     pub teacher_role: u64,
     pub guest_role: u64,
     pub verified_role: u64,
-
-    #[serde(default)]
-    pub class_students: HashMap<String, String>,
-
-    #[serde(default)]
-    pub link_chat: LinkChatConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -94,7 +99,7 @@ impl Default for GroupRouteConfig {
             discord_webhook_avatar_url: String::new(),
             message_template: "{name} ({group}): {message}".to_string(),
             webhook_name_template: "{name} ({group})".to_string(),
-            webhook_message_template: "{name} ({group}): {message}".to_string(),
+            webhook_message_template: "{message}".to_string(),
         }
     }
 }

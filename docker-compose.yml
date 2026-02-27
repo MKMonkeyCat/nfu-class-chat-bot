@@ -1,0 +1,12 @@
+services:
+  app:
+    image: class-chat-bot
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./db.db:/app/db.db
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped

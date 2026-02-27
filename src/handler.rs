@@ -130,7 +130,7 @@ async fn check_with_admin_role(ctx: &Context, msg: &Message) -> bool {
         let config_arc = data.get::<ConfigKey>().expect("Config missing").clone();
         config_arc.read().await.clone()
     };
-    for &role_id in &config.admin_roles {
+    for &role_id in &config.roles.admin_roles {
         if member.roles.contains(&RoleId::new(role_id)) {
             return true;
         }
@@ -307,7 +307,7 @@ impl EventHandler for Handler {
                                         gid,
                                         component.user.id,
                                         component.user.name.clone(),
-                                        vec![config.verified_role, config.guest_role],
+                                        vec![config.roles.verified_role, config.roles.guest_role],
                                     )
                                     .await;
                                 let _ = component
@@ -342,7 +342,7 @@ impl EventHandler for Handler {
 
                 let display_name = modal.user.display_name();
                 if let Some(guild_id) = modal.guild_id {
-                    let mut final_roles = vec![config.verified_role];
+                    let mut final_roles = vec![config.roles.verified_role];
                     let (final_nick, final_sid, final_name, is_valid) = match role_type {
                         "local" => {
                             let sid = inputs
@@ -368,7 +368,7 @@ impl EventHandler for Handler {
                             {
                                 (String::new(), String::new(), String::new(), false)
                             } else {
-                                final_roles.push(config.local_role);
+                                final_roles.push(config.roles.local_role);
                                 (
                                     format!(
                                         "{} ({})",
@@ -389,7 +389,7 @@ impl EventHandler for Handler {
                             if !check_student_id(&sid) {
                                 (String::new(), String::new(), String::new(), false)
                             } else {
-                                final_roles.push(config.senior_role);
+                                final_roles.push(config.roles.senior_role);
                                 (format!("[{}] {}", dept, display_name), sid, name, true)
                             }
                         }
@@ -397,7 +397,7 @@ impl EventHandler for Handler {
                             let name = inputs.get("name_input").cloned().unwrap_or_default();
                             let title = inputs.get("info_input").cloned().unwrap_or_default();
                             let dept = inputs.get("dept_input").cloned().unwrap_or_default();
-                            final_roles.push(config.teacher_role);
+                            final_roles.push(config.roles.teacher_role);
                             (
                                 format!("{} ({})", display_name, title),
                                 format!("T-{}", dept),

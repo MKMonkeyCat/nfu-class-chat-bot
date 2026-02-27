@@ -1,0 +1,44 @@
+# Discord 機器人管理權限與身分組設定
+[roles]
+# 具有管理員權限的角色 ID 列表
+admin_roles = [1234567890123456789] # 替換為實際的管理員角色ID
+
+# 各種身分組 ID
+local_role = 1234567890123456789    # 本地學生
+senior_role = 1234567890123456789   # 學長姐
+teacher_role = 1234567890123456789  # 教師
+guest_role = 1234567890123456789    # 訪客
+verified_role = 1234567890123456789 # 已驗證身分
+
+# 本班學生學號與姓名對照表
+[class_students]
+40000001 = "學生姓名 A"
+40000002 = "學生姓名 B"
+# ... 依此類推
+
+# LINE 與 Discord 訊息轉發 (Link Chat) 設定
+[link_chat]
+# 是否啟用轉發功能
+enabled = true
+# Webhook 伺服器監聽位址 (Docker 環境通常使用 0.0.0.0)
+bind = "0.0.0.0:8080"
+# API 快取時間（單位：秒）
+cache_ttl_seconds = 300
+# LINE 官方帳號憑證 (從 LINE Developers Console 取得)
+line_channel_secret = "YOUR_LINE_CHANNEL_SECRET"
+line_channel_access_token = "YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+
+# 群組對應設定：[link_chat.group_mapping.LINE群組ID]
+[link_chat.group_mapping."*"]
+# 目標 Discord 頻道 ID
+dc_channel_id = 1234567890123456789
+# Discord Webhook 網址 (若填寫此項，則優先使用 Webhook 發送以顯示自定義頭像)
+webhook_url = "https://discord.com/api/webhooks/..."
+
+# 訊息樣式範例：{name} ( {group} ): {message}
+message_template = "{name} ({group}): {message}"
+
+# Webhook 發送時的額外設定
+webhook_avatar_url = "https://example.com/avatar.png" # 預設頭像 (未設置則使用 LINE 頭像)
+webhook_name_template = "{name} ({group})"            # Webhook 顯示的名稱格式
+webhook_message_template = "{message}"                # Webhook 內容格式
