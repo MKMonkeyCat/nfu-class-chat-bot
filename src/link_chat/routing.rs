@@ -1,5 +1,5 @@
-use crate::app_config::LinkChatConfig;
 use chrono::{DateTime, Utc};
+use config::LinkChatConfig;
 
 use super::types::DeliveryTarget;
 

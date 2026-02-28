@@ -1,5 +1,6 @@
-use crate::db::{ActiveModel, Column, Entity};
 use crate::state::{ConfigKey, DbKey};
+use entity::model::guild_member::{self, MemberIdentity};
+use entity::prelude::GuildMember;
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{EntityTrait, Set};
 use serenity::all::{
@@ -422,15 +423,19 @@ impl EventHandler for Handler {
                         return;
                     }
 
-                    let _ = Entity::insert(ActiveModel {
+                    let _ = GuildMember::insert(guild_member::ActiveModel {
                         user_id: Set(modal.user.id.get() as i64),
                         name: Set(final_name),
                         employee_id: Set(final_sid),
-                        identity: Set(role_type.to_string()),
+                        identity: Set(MemberIdentity::from_str(role_type)),
                     })
                     .on_conflict(
-                        OnConflict::column(Column::UserId)
-                            .update_columns([Column::Name, Column::EmployeeId, Column::Identity])
+                        OnConflict::column(guild_member::Column::UserId)
+                            .update_columns([
+                                guild_member::Column::Name,
+                                guild_member::Column::EmployeeId,
+                                guild_member::Column::Identity,
+                            ])
                             .to_owned(),
                     )
                     .exec(&db)

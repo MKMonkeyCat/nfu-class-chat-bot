@@ -1,0 +1,15 @@
+[package]
+name = "config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+doc_reader = { path = "../doc_reader" }
+indexmap = "2"
+
+config = "0.15"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+notify = "8.2"
+tokio = { version = "1.31", features = ["fs", "rt", "sync", "time"] }

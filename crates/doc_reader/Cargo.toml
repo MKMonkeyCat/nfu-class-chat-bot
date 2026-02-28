@@ -1,0 +1,9 @@
+[package]
+name = "doc_reader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+doc_reader_derive = { path = "../doc_reader_derive" }
+
+indexmap = "2"
