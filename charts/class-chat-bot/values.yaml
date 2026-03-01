@@ -10,12 +10,6 @@ service:
   port: 8080
   targetPort: 8080
 
-env: []
-
-discordToken:
-  existingSecret: ""
-  secretKey: DISCORD_TOKEN
-
 persistence:
   config:
     enabled: true
@@ -37,3 +31,7 @@ resources: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+env:
+  DISCORD_TOKEN: ""
+  LLM_API_KEY: ""

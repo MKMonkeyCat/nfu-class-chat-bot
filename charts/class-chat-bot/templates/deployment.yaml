@@ -22,17 +22,6 @@ spec:
             - name: http
               containerPort: {{ .Values.service.targetPort }}
               protocol: TCP
-          env:
-            {{- if .Values.discordToken.existingSecret }}
-            - name: DISCORD_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.discordToken.existingSecret }}
-                  key: {{ .Values.discordToken.secretKey }}
-            {{- end }}
-            {{- with .Values.env }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
           volumeMounts:
             {{- if .Values.persistence.config.enabled }}
             - name: config
@@ -56,6 +45,9 @@ spec:
             claimName: {{ if .Values.persistence.data.existingClaim }}{{ .Values.persistence.data.existingClaim }}{{ else }}{{ include "class-chat-bot.fullname" . }}-data{{ end }}
         {{- end }}
       {{- with .Values.nodeSelector }}
+      envFrom:
+        - secretRef:
+            name: {{ include "class-chat-bot.fullname" . }}-env
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
