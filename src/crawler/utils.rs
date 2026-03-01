@@ -13,13 +13,3 @@ pub async fn crawler_prune_seen(db: &DatabaseConnection, ttl_seconds: u64) -> Re
     println!("[crawler] pruned {} seen keys", result.rows_affected);
     Ok(())
 }
-
-pub async fn crawler_seen_exists(db: &DatabaseConnection, key: &str) -> Result<bool, String> {
-    let exists = announcement::Entity::find()
-        .filter(announcement::Column::SeenKey.eq(key))
-        .one(db)
-        .await
-        .map_err(|err| format!("failed to check seen key: {err}"))?;
-
-    Ok(exists.is_some())
-}

@@ -54,17 +54,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
-                    .col(
-                        ColumnDef::new(Announcement::SeenKey)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Announcement::Simhash)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Announcement::Simhash).string().not_null())
                     .col(ColumnDef::new(Announcement::Chunk0).unsigned().not_null())
                     .col(ColumnDef::new(Announcement::Chunk1).unsigned().not_null())
                     .col(ColumnDef::new(Announcement::Chunk2).unsigned().not_null())
@@ -134,7 +124,6 @@ enum Announcement {
     Tags,
     ImplementationAt,
     CreatedAt,
-    SeenKey,
     Simhash,
     Chunk0,
     Chunk1,

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use utils::DocReader;
 
@@ -14,8 +16,18 @@ pub struct CrawlerConfig {
     /// LLM（大型語言模型）相關設定，用於內容分析或摘要
     pub llm: CrawlerLlmConfig,
 
+    /// 通知設定，用於爬蟲完成後推播通知
+    #[serde(default = "default_notifications")]
+    pub notifications: HashMap<String, NotificationConfig>,
+
     /// 各個爬蟲入口的設定
     pub entries: Vec<CrawlerEntryConfig>,
+}
+
+fn default_notifications() -> HashMap<String, NotificationConfig> {
+    let mut map = HashMap::new();
+    map.insert("default".to_string(), NotificationConfig::default());
+    map
 }
 
 impl Default for CrawlerConfig {
@@ -24,6 +36,7 @@ impl Default for CrawlerConfig {
             enabled: true,
             global_user_agent: "NFU-Bot/1.0 (Github:MKMonkeyCat/nfu-class-chat-bot)".to_string(),
             llm: CrawlerLlmConfig::default(),
+            notifications: default_notifications(),
             entries: vec![CrawlerEntryConfig::default()],
         }
     }
@@ -56,8 +69,8 @@ pub struct CrawlerEntryConfig {
     /// 子內容選取器設定，用於抓取詳細頁資料
     pub sub_selectors: Option<SubSelectionConfig>,
 
-    /// 通知設定，用於爬蟲完成後推播通知
-    pub notifications: NotificationConfig,
+    /// 通知目標列表，指定要推播通知的頻道或平台（例如 Discord 頻道 ID）
+    pub notify_targets: Vec<String>,
 }
 
 impl Default for CrawlerEntryConfig {
@@ -71,7 +84,7 @@ impl Default for CrawlerEntryConfig {
             config: EntryRunConfig::default(),
             selectors: SelectionConfig::default(),
             sub_selectors: Some(SubSelectionConfig::default()),
-            notifications: NotificationConfig::default(),
+            notify_targets: vec!["default".to_string()],
         }
     }
 }
@@ -145,7 +158,7 @@ impl Default for SelectionConfig {
             title_selector: ".w-annc__title".to_string(),
             link_selector: "a".to_string(),
             time_selector: ".w-annc__postdate".to_string(),
-            tags_selector: Some(".tags".to_string()),
+            tags_selector: None,
         }
     }
 }
@@ -169,8 +182,8 @@ pub struct SubSelectionConfig {
 impl Default for SubSelectionConfig {
     fn default() -> Self {
         Self {
-            full_content: ".article-content-box".to_string(),
-            author_unit: ".info-dept".to_string(),
+            full_content: ".s-annc__post-body".to_string(),
+            author_unit: ".s-annc__author".to_string(),
             attachments: ".file-download-list a".to_string(),
             attachment_attr: "href".to_string(),
         }
@@ -179,7 +192,11 @@ impl Default for SubSelectionConfig {
 
 /// 通知設定
 #[derive(Debug, Serialize, Deserialize, Clone, DocReader)]
+#[serde(default)]
 pub struct NotificationConfig {
+    /// 是否啟用本通知
+    pub enabled: bool,
+
     /// Discord 通知設定
     pub discord: DiscordNotificationConfig,
 }
@@ -187,6 +204,7 @@ pub struct NotificationConfig {
 impl Default for NotificationConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             discord: DiscordNotificationConfig::default(),
         }
     }
@@ -194,6 +212,7 @@ impl Default for NotificationConfig {
 
 /// Discord 推播設定
 #[derive(Debug, Serialize, Deserialize, Clone, DocReader)]
+#[serde(default)]
 pub struct DiscordNotificationConfig {
     /// Discord Webhook URL
     pub webhook_url: String,
@@ -224,17 +243,12 @@ impl Default for DiscordNotificationConfig {
     fn default() -> Self {
         Self {
             webhook_url: "https://discord.com/api/webhooks/...".to_string(),
-            webhook_name_template: "MyCrawlerBot".to_string(),
+            webhook_name_template: "{entry_name} 爬蟲通知".to_string(),
             webhook_avatar_url: "".to_string(),
             channel_id: 123456789012345678,
-            embed_title: "📌 {title}".to_string(),
+            embed_title: "{title}".to_string(),
             embed_color: 3447003,
             fields: vec![
-                DiscordFieldConfig {
-                    name: "發佈單位".to_string(),
-                    value: "{author_unit}".to_string(),
-                    inline: true,
-                },
                 DiscordFieldConfig {
                     name: "類別".to_string(),
                     value: "{category}".to_string(),
@@ -246,13 +260,13 @@ impl Default for DiscordNotificationConfig {
                     inline: true,
                 },
                 DiscordFieldConfig {
-                    name: "摘要".to_string(),
-                    value: "{summary}".to_string(),
+                    name: "標籤".to_string(),
+                    value: "{tags}".to_string(),
                     inline: true,
                 },
                 DiscordFieldConfig {
-                    name: "標籤".to_string(),
-                    value: "{tags}".to_string(),
+                    name: "大綱".to_string(),
+                    value: "{analysis}".to_string(),
                     inline: false,
                 },
             ],
@@ -263,6 +277,7 @@ impl Default for DiscordNotificationConfig {
 
 /// Discord Embed 欄位設定
 #[derive(Debug, Serialize, Deserialize, Clone, DocReader)]
+#[serde(default)]
 pub struct DiscordFieldConfig {
     /// 欄位名稱
     pub name: String,
@@ -272,6 +287,16 @@ pub struct DiscordFieldConfig {
 
     /// 是否內聯顯示
     pub inline: bool,
+}
+
+impl Default for DiscordFieldConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            value: String::new(),
+            inline: false,
+        }
+    }
 }
 
 /// LLM 相關設定
@@ -297,7 +322,7 @@ impl Default for CrawlerLlmConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            api_url: "https://api.example-llm.com".to_string(),
+            api_url: "http://localhost:4000/v1/chat/completions".to_string(),
             model: "qwen2.5-14b".to_string(),
             api_key_env: "LLM_API_KEY".to_string(),
             knowledge_base: vec![

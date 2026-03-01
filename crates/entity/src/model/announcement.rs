@@ -21,10 +21,7 @@ pub struct Model {
     #[sea_orm(auto_create_time)]
     pub created_at: DateTimeUtc,
 
-    #[sea_orm(indexed, unique)]
-    pub seen_key: String,
-
-    pub simhash: i64,
+    pub simhash: String, // u64
     #[sea_orm(indexed)]
     pub chunk0: u16,
     #[sea_orm(indexed)]

@@ -1,5 +1,4 @@
 use jieba_rs::{Jieba, KeywordExtract, TfIdf};
-use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 fn calculate_hash(word: &str) -> u64 {
@@ -62,25 +61,8 @@ impl FingerprintEngine {
             }
         }
     }
-}
 
-pub struct FingerprintIndex {
-    blocks: [HashMap<u16, Vec<(u64, usize)>>; 4],
-}
-
-impl FingerprintIndex {
-    pub fn new() -> Self {
-        Self {
-            blocks: [
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-            ],
-        }
-    }
-
-    fn split_fingerprint(fp: u64) -> [u16; 4] {
+    pub fn split_fingerprint(fp: u64) -> [u16; 4] {
         [
             (fp & 0xFFFF) as u16,
             ((fp >> 16) & 0xFFFF) as u16,
@@ -89,48 +71,8 @@ impl FingerprintIndex {
         ]
     }
 
-    pub fn hamming_distance(lhs: u64, rhs: u64) -> u32 {
-        (lhs ^ rhs).count_ones()
-    }
-
-    pub fn insert(&mut self, fp: u64, doc_id: usize) {
-        let chunks = Self::split_fingerprint(fp);
-        for (i, &chunk) in chunks.iter().enumerate() {
-            self.blocks[i].entry(chunk).or_default().push((fp, doc_id));
-        }
-    }
-
-    pub fn search(&self, fp: u64, threshold: u32) -> Vec<(usize, u32)> {
-        let mut found = HashMap::new();
-        let chunks = Self::split_fingerprint(fp);
-
-        for (i, &chunk) in chunks.iter().enumerate() {
-            if let Some(candidates) = self.blocks[i].get(&chunk) {
-                for &(cand_fp, doc_id) in candidates {
-                    let dist = Self::hamming_distance(fp, cand_fp);
-                    if dist <= threshold {
-                        found.insert(doc_id, dist);
-                    }
-                }
-            }
-        }
-
-        if found.is_empty() && threshold > 12 {
-            for block in &self.blocks {
-                for candidates in block.values() {
-                    for &(cand_fp, doc_id) in candidates {
-                        let dist = Self::hamming_distance(fp, cand_fp);
-                        if dist <= threshold {
-                            found.insert(doc_id, dist);
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut res: Vec<_> = found.into_iter().collect();
-        res.sort_by_key(|&(_, dist)| dist);
-        res
+    pub fn hamming_distance(fp1: u64, fp2: u64) -> u32 {
+        (fp1 ^ fp2).count_ones()
     }
 }
 
@@ -141,7 +83,6 @@ mod tests {
     #[test]
     fn test_simhash_simplified_chinese_logic() {
         let engine = FingerprintEngine::new();
-        let mut index = FingerprintIndex::new();
 
         let doc_0 = "今天天气非常好，我想去公园散步吃苹果。";
         let doc_1 = "天气挺不错的今天，我打算去公园走走吃个苹果。";
@@ -155,47 +96,25 @@ mod tests {
         let fp_3 = engine.generate(doc_3);
         let fp_4 = engine.generate(doc_4);
 
+        let dist_0_1 = FingerprintEngine::hamming_distance(fp_0, fp_1);
+        let dist_0_2 = FingerprintEngine::hamming_distance(fp_0, fp_2);
+        let dist_0_3 = FingerprintEngine::hamming_distance(fp_0, fp_3);
+        let dist_0_4 = FingerprintEngine::hamming_distance(fp_0, fp_4);
+
+        // println!("Distance between doc_0 and doc_1: {}", dist_0_1); // 15
+        // println!("Distance between doc_0 and doc_2: {}", dist_0_2); // 8
+        // println!("Distance between doc_0 and doc_3: {}", dist_0_3); // 34
+        // println!("Distance between doc_0 and doc_4: {}", dist_0_4); // 31
+
         let threshold = 16;
+        assert!(dist_0_1 <= threshold);
+        assert!(dist_0_2 <= threshold);
+        assert!(dist_0_3 > threshold);
+        assert!(dist_0_4 > threshold);
 
-        let dist_1 = FingerprintIndex::hamming_distance(fp_0, fp_1);
-        assert!(
-            dist_1 < threshold,
-            "Distance too large after word reordering: {}",
-            dist_1
-        );
-
-        let dist_2 = FingerprintIndex::hamming_distance(fp_0, fp_2);
-        assert!(
-            dist_2 < threshold,
-            "Distance too large after text reduction: {}",
-            dist_2
-        );
-
-        let dist_3 = FingerprintIndex::hamming_distance(fp_0, fp_3);
-        assert!(
-            dist_3 > threshold,
-            "Distance too small for completely different topics: {}",
-            dist_3
-        );
-
-        index.insert(fp_0, 0);
-        index.insert(fp_3, 3);
-        index.insert(fp_4, 4);
-
-        let matches = index.search(fp_1, threshold);
-        let match_ids: Vec<usize> = matches.iter().map(|m| m.0).collect();
-
-        assert!(
-            match_ids.contains(&0),
-            "Should match the baseline document (ID 0)"
-        );
-        assert!(
-            !match_ids.contains(&3),
-            "Should not match unrelated AI document (ID 3)"
-        );
-        assert!(
-            !match_ids.contains(&4),
-            "Should not match unrelated recipe document (ID 4)"
-        );
+        assert!(dist_0_1 == 15);
+        assert!(dist_0_2 == 8);
+        assert!(dist_0_3 == 34);
+        assert!(dist_0_4 == 31);
     }
 }

@@ -1,6 +1,6 @@
 mod crawler;
 mod db;
-mod handler;
+mod discord;
 mod leader_election;
 mod link_chat;
 mod state;
@@ -8,7 +8,7 @@ mod state;
 use config::{load_all_configs, spawn_config_hot_reload};
 use crawler::spawn_crawler;
 use db::init_db;
-use handler::Handler;
+use discord::Handler;
 use leader_election::try_acquire_leadership;
 use link_chat::spawn_line_to_discord_bridge;
 use serenity::prelude::*;

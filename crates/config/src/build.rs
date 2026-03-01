@@ -2,6 +2,17 @@ use serde::Serialize;
 use toml::Value;
 use utils::{DocNode, DocReader};
 
+fn empty_doc_node() -> DocNode {
+    DocNode::Node("", Default::default())
+}
+
+fn resolve_child_node<'a>(
+    children: &'a indexmap::IndexMap<&'static str, DocNode>,
+    key: &str,
+) -> Option<&'a DocNode> {
+    children.get(key).or_else(|| children.get("*"))
+}
+
 fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) -> String {
     let mut output = String::new();
 
@@ -39,7 +50,7 @@ fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) ->
             }
 
             for (key, val) in leaves {
-                let child_node = children.get(key.as_str());
+                let child_node = resolve_child_node(children, key.as_str());
                 let field_doc = match child_node {
                     Some(DocNode::Leaf(d)) | Some(DocNode::Node(d, _)) => *d,
                     _ => "",
@@ -54,7 +65,7 @@ fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) ->
             }
 
             for (key, val) in complexes {
-                let child_node = children.get(key.as_str());
+                let child_node = resolve_child_node(children, key.as_str());
                 let mut next_path = path.clone();
                 let escaped_key = escape_toml_key(key);
                 next_path.push(escaped_key.clone());
@@ -85,6 +96,13 @@ fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) ->
                                         item,
                                         next_path.clone(),
                                     ));
+                                } else {
+                                    let fallback = empty_doc_node();
+                                    output.push_str(&build_toml_with_comments(
+                                        &fallback,
+                                        item,
+                                        next_path.clone(),
+                                    ));
                                 }
                             }
                         }
@@ -99,6 +117,9 @@ fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) ->
                         if inner_table.is_empty() {
                         } else if let Some(node) = child_node {
                             output.push_str(&build_toml_with_comments(node, val, next_path));
+                        } else {
+                            let fallback = empty_doc_node();
+                            output.push_str(&build_toml_with_comments(&fallback, val, next_path));
                         }
                     }
                     _ => {}

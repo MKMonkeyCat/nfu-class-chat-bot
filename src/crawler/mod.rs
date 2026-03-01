@@ -7,12 +7,14 @@ mod sim_hash;
 mod types;
 mod utils;
 
+use crate::crawler::sim_hash::FingerprintEngine;
 use crate::crawler::utils::crawler_prune_seen;
 use chrono::{DateTime, Utc};
-use config::{CrawlerConfig, CrawlerEntryConfig, CrawlerLlmConfig};
+use config::{CrawlerConfig, CrawlerEntryConfig, CrawlerLlmConfig, NotificationConfig};
 use entity::model::announcement;
 use reqwest::Client;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::ActiveValue::Set;
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use serenity::all::Http;
 use serenity::prelude::RwLock;
 use std::collections::{HashMap, HashSet};
@@ -52,7 +54,8 @@ pub fn spawn_crawler(config: Arc<RwLock<CrawlerConfig>>, http: Arc<Http>, db: Da
                     eprintln!("[crawler] failed to prune seen keys: {}", err);
                 }
 
-                match process_entry(&reqwest, &http, &db, entry, &cfg.llm).await {
+                match process_entry(&reqwest, &http, &db, entry, &cfg.llm, &cfg.notifications).await
+                {
                     Ok(sent) if sent > 0 => {
                         println!("[crawler] {} pushed {} post(s)", entry.name, sent);
                     }
@@ -76,6 +79,7 @@ async fn process_entry(
     db: &DatabaseConnection,
     entry: &CrawlerEntryConfig,
     llm_cfg: &CrawlerLlmConfig,
+    notifications: &HashMap<String, NotificationConfig>,
 ) -> Result<usize, String> {
     let timeout = Duration::from_millis(entry.timeout_ms.max(1000));
     let response = reqwest
@@ -115,6 +119,7 @@ async fn process_entry(
 
     base_posts.retain(|post| !existing_urls.contains(&post.url));
 
+    let engine = FingerprintEngine::new();
     let mut sent = 0usize;
     for post in &base_posts {
         println!("[crawler] {} found new post: '{:?}'", entry.name, post);
@@ -151,12 +156,115 @@ async fn process_entry(
 
         let llm_result = call_llm(&reqwest, llm_cfg, &post).await?;
         println!("[LLM] {} result: {:?}", entry.name, llm_result);
-        let message = build_discord_message(&post, &llm_result);
-        if let Err(err) = send_to_discord(&reqwest, http, entry, &message).await {
-            eprintln!("[crawler] {} failed to send message: {}", entry.name, err);
+
+        let fp = engine.generate(&llm_result.analysis_cn);
+        let chunks = FingerprintEngine::split_fingerprint(fp);
+        let threshold = 16;
+
+        let candidates = announcement::Entity::find()
+            .filter(
+                Condition::any()
+                    .add(announcement::Column::Chunk0.eq(chunks[0]))
+                    .add(announcement::Column::Chunk1.eq(chunks[1]))
+                    .add(announcement::Column::Chunk2.eq(chunks[2]))
+                    .add(announcement::Column::Chunk3.eq(chunks[3])),
+            )
+            .all(db)
+            .await
+            .map_err(|err| format!("db query failed: {err}"))?;
+
+        let mut is_similar = false;
+        for candidate in &candidates {
+            let cand_fp = candidate.simhash.parse::<u64>().unwrap_or(0);
+            if cand_fp == 0 {
+                continue;
+            }
+
+            let dist = FingerprintEngine::hamming_distance(fp, cand_fp);
+            if dist <= threshold {
+                is_similar = true;
+                break;
+            }
+        }
+
+        let new_announcement = announcement::ActiveModel {
+            id: Default::default(), // auto-increment
+            category: Set(post.category.clone()),
+            source_name: Set(post.source_name.clone()),
+            title: Set(post.title.clone()),
+            url: Set(post.url.clone()),
+            content: Set(post.content.clone()),
+            time: Set(post.time.clone()),
+            tags: Set(announcement::TagList(post.tags.clone())),
+
+            implementation_at: Set(Utc::now()),
+            created_at: Set(Utc::now()),
+
+            simhash: Set(fp.to_string()),
+            chunk0: Set(chunks[0]),
+            chunk1: Set(chunks[1]),
+            chunk2: Set(chunks[2]),
+            chunk3: Set(chunks[3]),
+        };
+
+        if let Err(err) = announcement::Entity::insert(new_announcement)
+            .exec(db)
+            .await
+        {
+            eprintln!(
+                "[crawler] {} failed to save announcement: {}",
+                entry.name, err
+            );
+        }
+
+        if !is_similar {
+            let targets = selected_notifications(entry, notifications);
+            if targets.is_empty() {
+                println!(
+                    "[crawler] {} skip notification for '{}' (target not matched)",
+                    entry.name, post.title
+                );
+                continue;
+            }
+
+            let mut delivered = false;
+            for notification in targets {
+                let message = build_discord_message(entry, notification, &post, &llm_result);
+                if let Err(err) = send_to_discord(reqwest, http, notification, &message).await {
+                    eprintln!(
+                        "[crawler] {} failed to send Discord message: {}",
+                        entry.name, err
+                    );
+                } else {
+                    delivered = true;
+                }
+            }
+
+            if delivered {
+                sent += 1;
+            }
         } else {
-            sent += 1;
+            println!(
+                "[crawler] {} found similar post for '{}', skipping Discord message",
+                entry.name, post.title
+            );
         }
     }
     Ok(sent)
+}
+
+fn selected_notifications<'a>(
+    entry: &CrawlerEntryConfig,
+    notifications: &'a HashMap<String, NotificationConfig>,
+) -> Vec<&'a NotificationConfig> {
+    if entry.notify_targets.is_empty() {
+        return notifications.values().filter(|n| n.enabled).collect();
+    }
+
+    entry
+        .notify_targets
+        .iter()
+        .filter_map(|target_id| notifications.get(target_id))
+        .filter(|notification| notification.enabled)
+        .collect()
 }
