@@ -19,6 +19,8 @@ pub struct CrawledPost {
     pub(crate) title: String,
     pub(crate) url: String,
     pub(crate) content: String,
+    pub(crate) author_unit: String,
+    pub(crate) attachments: Vec<String>,
     pub(crate) time: String,
     pub(crate) tags: Vec<String>,
 }

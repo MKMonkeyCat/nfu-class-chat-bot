@@ -10,11 +10,12 @@ mod utils;
 use crate::crawler::utils::crawler_prune_seen;
 use chrono::{DateTime, Utc};
 use config::{CrawlerConfig, CrawlerEntryConfig, CrawlerLlmConfig};
+use entity::model::announcement;
 use reqwest::Client;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serenity::all::Http;
 use serenity::prelude::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,7 +23,6 @@ use delivery::send_to_discord;
 use llm::call_llm;
 use message::build_discord_message;
 use schedule::{FALLBACK_LOOP_SECONDS, SEEN_TTL_SECONDS, compute_next_run};
-use types::LlmResult;
 
 pub fn spawn_crawler(config: Arc<RwLock<CrawlerConfig>>, http: Arc<Http>, db: DatabaseConnection) {
     tokio::spawn(async move {
@@ -93,40 +93,71 @@ async fn process_entry(
         .map_err(|err| format!("read body failed: {err}"))?;
 
     let base_posts = parser::parse_base_posts(entry, &body)?;
-    for post in &base_posts {
-        println!(
-            "[crawler] {} found post: id='{}', title='{}'",
-            entry.name, post.id, post.title
-        );
-    }
+    let mut base_posts = base_posts
+        .into_iter()
+        .filter(|post| !post.url.is_empty())
+        .collect::<Vec<_>>();
 
-    // let mut posts = parse_posts(entry, &body)?;
-    // if posts.is_empty() {
-    //     return Ok(0);
-    // }
+    let base_posts_urls = base_posts
+        .iter()
+        .map(|post| post.url.clone())
+        .collect::<Vec<_>>();
 
-    // posts.reverse();
+    let existing_announcements: Vec<announcement::Model> = announcement::Entity::find()
+        .filter(announcement::Column::Url.is_in(base_posts_urls))
+        .all(db)
+        .await
+        .map_err(|err| format!("db query failed: {err}"))?;
+
+    let existing_urls = existing_announcements
+        .into_iter()
+        .map(|a| a.url)
+        .collect::<HashSet<_>>();
+
+    base_posts.retain(|post| !existing_urls.contains(&post.url));
 
     let mut sent = 0usize;
-    // for post in posts {
-    //     let llm_result = if llm_cfg.enabled {
-    //         call_llm(reqwest, llm_cfg, &post).await.unwrap_or_default()
-    //     } else {
-    //         LlmResult {
-    //             is_relevant: true,
-    //             title: post.title.clone(),
-    //             summary: post.content.chars().take(120).collect(),
-    //             analysis: post.content.clone(),
-    //             analysis_cn: post.content.clone(),
-    //             calendar: Vec::new(),
-    //             tags: Vec::new(),
-    //         }
-    //     };
+    for post in &base_posts {
+        println!("[crawler] {} found new post: '{:?}'", entry.name, post);
 
-    //     let content = build_discord_message(&post, &llm_result);
-    //     send_to_discord(reqwest, http, entry, &content).await?;
-    //     sent += 1;
-    // }
+        let timeout = Duration::from_millis(entry.timeout_ms.max(1000));
+        let response = reqwest
+            .get(&post.url)
+            .header("User-Agent", entry.config.user_agent.as_str())
+            .timeout(timeout)
+            .send()
+            .await
+            .map_err(|err| format!("fetch failed: {err}"))?;
 
+        let body = response
+            .text()
+            .await
+            .map_err(|err| format!("read body failed: {err}"))?;
+
+        let post = match parser::parse_full_post(entry, post, &body) {
+            Ok(c) => c,
+            Err(err) => {
+                eprintln!(
+                    "[crawler] {} failed to fetch full content for post '{}': {}",
+                    entry.name, post.title, err
+                );
+                continue;
+            }
+        };
+
+        println!(
+            "[crawler] {} fetched full content for post '{:?}'",
+            entry.name, post
+        );
+
+        let llm_result = call_llm(&reqwest, llm_cfg, &post).await?;
+        println!("[LLM] {} result: {:?}", entry.name, llm_result);
+        let message = build_discord_message(&post, &llm_result);
+        if let Err(err) = send_to_discord(&reqwest, http, entry, &message).await {
+            eprintln!("[crawler] {} failed to send message: {}", entry.name, err);
+        } else {
+            sent += 1;
+        }
+    }
     Ok(sent)
 }

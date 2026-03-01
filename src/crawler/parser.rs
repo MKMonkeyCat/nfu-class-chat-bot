@@ -81,19 +81,56 @@ pub(crate) fn parse_base_posts(
 
 pub(crate) fn parse_full_post(
     entry: &CrawlerEntryConfig,
+    base_post: &CrawlerBasePost,
     body: &str,
 ) -> Result<CrawledPost, String> {
     let document = Html::parse_document(body);
 
+    let sub_selectors = match &entry.sub_selectors {
+        Some(s) => s,
+        None => {
+            return Ok(CrawledPost {
+                id: base_post.id.clone(),
+                category: base_post.category.clone(),
+                source_name: entry.name.clone(),
+                title: base_post.title.clone(),
+                url: base_post.url.clone(),
+                content: String::new(),
+                author_unit: String::new(),
+                attachments: Vec::new(),
+                time: base_post.time.clone(),
+                tags: base_post.tags.clone(),
+            });
+        }
+    };
+
+    let author_sel = Selector::parse(&sub_selectors.author_unit)
+        .map_err(|e| format!("invalid author_unit selector: {e}"))?;
+    let content_sel = Selector::parse(&sub_selectors.full_content)
+        .map_err(|e| format!("invalid full_content selector: {e}"))?;
+    let attachments_sel = Selector::parse(&sub_selectors.attachments)
+        .map_err(|e| format!("invalid attachments selector: {e}"))?;
+
+    let content = select_text(&document.root_element(), &content_sel);
+    let author_unit = select_text(&document.root_element(), &author_sel);
+    let attachments = document
+        .select(&attachments_sel)
+        .filter_map(|node| node.value().attr("href"))
+        .map(|href| absolutize_url(&base_post.url, href))
+        .filter(|url| !url.is_empty())
+        .collect::<Vec<_>>();
+
     Ok(CrawledPost {
-        id: String::new(),
-        category: String::new(),
+        id: base_post.id.clone(),
+        category: base_post.category.clone(),
         source_name: entry.name.clone(),
-        title: String::new(),
-        url: String::new(),
-        content: String::new(),
-        time: String::new(),
-        tags: Vec::new(),
+        title: base_post.title.clone(),
+        url: base_post.url.clone(),
+        content,
+        author_unit,
+        attachments,
+        time: base_post.time.clone(),
+        tags: base_post.tags.clone(),
     })
 }
 
