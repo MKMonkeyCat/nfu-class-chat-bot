@@ -9,10 +9,10 @@ mod utils;
 
 use crate::crawler::sim_hash::FingerprintEngine;
 use crate::crawler::utils::crawler_prune_seen;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Days, Utc};
 use config::{CrawlerConfig, CrawlerEntryConfig, CrawlerLlmConfig, NotificationConfig};
 use entity::model::announcement;
-use reqwest::Client;
+use reqwest::{Client, header};
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use serenity::all::Http;
@@ -81,24 +81,45 @@ async fn process_entry(
     llm_cfg: &CrawlerLlmConfig,
     notifications: &HashMap<String, NotificationConfig>,
 ) -> Result<usize, String> {
-    let timeout = Duration::from_millis(entry.timeout_ms.max(1000));
-    let response = reqwest
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .expect("failed to build reqwest client");
+
+    let mut headers = header::HeaderMap::new();
+
+    headers.insert(
+        header::USER_AGENT,
+        header::HeaderValue::from_str(&entry.config.user_agent).unwrap(),
+    );
+    headers.insert(
+        header::ACCEPT_LANGUAGE,
+        header::HeaderValue::from_static("zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"),
+    );
+
+    let timeout = Duration::from_millis(entry.timeout_ms);
+    let response = client
         .get(&entry.url)
-        .header("User-Agent", entry.config.user_agent.as_str())
+        .headers(headers.clone())
         .timeout(timeout)
         .send()
         .await
-        .map_err(|err| format!("fetch failed: {err}"))?;
+        .map_err(|err| format!("fetch failed: {:#?}", err))?;
 
     let body = response
         .text()
         .await
         .map_err(|err| format!("read body failed: {err}"))?;
 
-    let base_posts = parser::parse_base_posts(entry, &body)?;
+    let now = Utc::now()
+        .checked_sub_days(Days::new(10))
+        .unwrap_or_else(|| Utc::now());
+
+    let base_posts: Vec<types::CrawlerBasePost> = parser::parse_base_posts(entry, &body)?;
     let mut base_posts = base_posts
         .into_iter()
-        .filter(|post| !post.url.is_empty())
+        .filter(|post| !post.url.is_empty() && post.time >= now)
+        .take(entry.config.max_items_per_run as usize)
         .collect::<Vec<_>>();
 
     let base_posts_urls = base_posts
@@ -125,9 +146,9 @@ async fn process_entry(
         println!("[crawler] {} found new post: '{:?}'", entry.name, post);
 
         let timeout = Duration::from_millis(entry.timeout_ms.max(1000));
-        let response = reqwest
+        let response = client
             .get(&post.url)
-            .header("User-Agent", entry.config.user_agent.as_str())
+            .headers(headers.clone())
             .timeout(timeout)
             .send()
             .await
@@ -194,7 +215,7 @@ async fn process_entry(
             title: Set(post.title.clone()),
             url: Set(post.url.clone()),
             content: Set(post.content.clone()),
-            time: Set(post.time.clone()),
+            time: Set(post.time.to_string()),
             tags: Set(announcement::TagList(post.tags.clone())),
 
             implementation_at: Set(Utc::now()),

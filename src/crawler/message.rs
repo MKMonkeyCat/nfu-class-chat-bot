@@ -24,7 +24,7 @@ struct CrawlerTemplateContext {
     author_unit: String,
     url: String,
     time: String,
-    tags: String,
+    tags: Vec<String>,
     calendar: String,
     attachments: String,
 }
@@ -49,18 +49,11 @@ pub(crate) fn build_discord_message(
 
     let mut tags = post.tags.clone();
     for tag in &llm.tags {
-        if !tag.trim().is_empty() && !tags.iter().any(|existing| existing == tag) {
-            tags.push(tag.clone());
+        let tag = tag.trim();
+        if !tag.is_empty() && !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
         }
     }
-
-    let tags_text = tags
-        .iter()
-        .map(|tag| tag.trim())
-        .filter(|tag| !tag.is_empty())
-        .map(|tag| format!("#{tag}"))
-        .collect::<Vec<_>>()
-        .join(" ");
 
     let calendar_text = if llm.calendar.is_empty() {
         String::new()
@@ -90,8 +83,8 @@ pub(crate) fn build_discord_message(
         source_name: post.source_name.clone(),
         author_unit: post.author_unit.clone(),
         url: post.url.clone(),
-        time: post.time.clone(),
-        tags: tags_text,
+        time: post.time.to_string(),
+        tags,
         calendar: calendar_text,
         attachments: attachments_text,
     };
@@ -135,11 +128,7 @@ pub(crate) fn build_discord_message(
             url: post.url.clone(),
             color: notification.discord.embed_color,
             fields,
-            footer: if post.time.trim().is_empty() {
-                String::new()
-            } else {
-                format!("時間：{}", post.time)
-            },
+            footer: post.time.to_string(),
         },
     }
 }

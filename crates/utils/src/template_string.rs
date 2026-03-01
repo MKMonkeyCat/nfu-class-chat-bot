@@ -88,7 +88,6 @@ impl CompiledTemplate {
                         return (nodes, end + 1);
                     }
 
-                    // variable
                     let mut parts = token.split('|');
                     let main = parts.next().unwrap().trim();
 
@@ -141,11 +140,14 @@ impl CompiledTemplate {
                 Node::Literal(s) => out.push_str(s),
                 Node::Variable { path, fmt, filters } => {
                     if let Some(v) = Self::resolve(ctx, path) {
-                        if let Some(mut val) = Self::format_value(v, fmt.as_deref()) {
-                            for f in filters {
-                                val = Self::apply_filter(val, f);
-                            }
-                            out.push_str(&val);
+                        let mut current_val = v.clone();
+
+                        for f in filters {
+                            current_val = Self::apply_value_filter(current_val, f);
+                        }
+
+                        if let Some(val_str) = Self::format_value(&current_val, fmt.as_deref()) {
+                            out.push_str(&val_str);
                         }
                     }
                 }
@@ -195,14 +197,42 @@ impl CompiledTemplate {
         }
     }
 
-    fn apply_filter(mut val: String, filter: &str) -> String {
-        match filter {
-            "upper" => val = val.to_uppercase(),
-            "lower" => val = val.to_lowercase(),
-            "trim" => val = val.trim().to_string(),
-            "len" => val = val.len().to_string(),
-            _ => {}
+    fn apply_value_filter(val: Value, filter: &str) -> Value {
+        let filter_cmd = filter.trim();
+
+        if filter_cmd.starts_with("join") {
+            if let Value::Array(arr) = val {
+                let delimiter = filter_cmd
+                    .strip_prefix("join")
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches(|c| c == '\'' || c == '"');
+
+                let joined: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::String(s) => Some(s.clone()),
+                        Value::Number(n) => Some(n.to_string()),
+                        Value::Bool(b) => Some(b.to_string()),
+                        _ => None,
+                    })
+                    .collect();
+
+                return Value::String(joined.join(delimiter));
+            }
         }
+
+        if let Value::String(s) = val {
+            let new_str = match filter_cmd {
+                "upper" => s.to_uppercase(),
+                "lower" => s.to_lowercase(),
+                "trim" => s.trim().to_string(),
+                "len" => s.len().to_string(),
+                _ => s,
+            };
+            return Value::String(new_str);
+        }
+
         val
     }
 
@@ -234,6 +264,7 @@ mod tests {
         is_active: bool,
         users: Vec<User>,
         timestamp: DateTime<Utc>,
+        tags: Vec<String>,
     }
 
     fn sample() -> Ctx {
@@ -247,6 +278,7 @@ mod tests {
                 },
             ],
             timestamp: Utc.with_ymd_and_hms(2026, 5, 20, 13, 14, 0).unwrap(),
+            tags: vec!["Rust".into(), "Template".into(), "Engine".into()],
         }
     }
 
@@ -278,5 +310,11 @@ mod tests {
     fn test_date() {
         let tpl = CompiledTemplate::compile("{timestamp:%Y-%m-%d}");
         assert_eq!(tpl.render(&sample()), "2026-05-20");
+    }
+
+    #[test]
+    fn test_join_filter() {
+        let tpl = CompiledTemplate::compile("Tags: {tags|join ', '}");
+        assert_eq!(tpl.render(&sample()), "Tags: Rust, Template, Engine");
     }
 }

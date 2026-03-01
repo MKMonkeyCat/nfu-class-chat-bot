@@ -1,4 +1,5 @@
 use crate::crawler::types::CrawlerBasePost;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use config::CrawlerEntryConfig;
 use scraper::{ElementRef, Html, Selector};
 use url::Url;
@@ -32,7 +33,7 @@ pub(crate) fn parse_base_posts(
         let id = select_attr(&item, &id_sel, "href");
         let title = select_text(&item, &title_sel);
         let url = absolutize_url(&entry.url, &select_attr(&item, &link_sel, "href"));
-        let time = select_text(&item, &time_sel);
+        let time = select_text(&item, &time_sel).replace("寫於", "");
 
         if id.is_empty() || title.is_empty() || url.is_empty() {
             continue;
@@ -66,12 +67,11 @@ pub(crate) fn parse_base_posts(
             .unwrap_or_default();
 
         output.push(CrawlerBasePost {
-            id,
             category,
             source_name,
             title,
             url,
-            time,
+            time: parse_time_string(&time).unwrap_or_else(|_| Utc::now()),
             tags,
         });
     }
@@ -86,19 +86,24 @@ pub(crate) fn parse_full_post(
 ) -> Result<CrawledPost, String> {
     let document = Html::parse_document(body);
 
+    let source_name = if base_post.source_name.trim().is_empty() {
+        entry.name.clone()
+    } else {
+        base_post.source_name.clone()
+    };
+
     let sub_selectors = match &entry.sub_selectors {
         Some(s) => s,
         None => {
             return Ok(CrawledPost {
-                id: base_post.id.clone(),
                 category: base_post.category.clone(),
-                source_name: entry.name.clone(),
+                source_name: source_name.clone(),
                 title: base_post.title.clone(),
                 url: base_post.url.clone(),
                 content: String::new(),
                 author_unit: String::new(),
                 attachments: Vec::new(),
-                time: base_post.time.clone(),
+                time: base_post.time,
                 tags: base_post.tags.clone(),
             });
         }
@@ -121,15 +126,14 @@ pub(crate) fn parse_full_post(
         .collect::<Vec<_>>();
 
     Ok(CrawledPost {
-        id: base_post.id.clone(),
         category: base_post.category.clone(),
-        source_name: entry.name.clone(),
+        source_name: source_name.clone(),
         title: base_post.title.clone(),
         url: base_post.url.clone(),
         content,
         author_unit,
         attachments,
-        time: base_post.time.clone(),
+        time: base_post.time,
         tags: base_post.tags.clone(),
     })
 }
@@ -182,4 +186,112 @@ fn absolutize_url(base: &str, target: &str) -> String {
     }
 
     target.to_string()
+}
+
+fn parse_time_string(time_str: &str) -> Result<DateTime<Utc>, String> {
+    let mut s = time_str.trim().to_string();
+
+    if let Some(rest) = s.strip_prefix("寫於") {
+        s = rest.trim().to_string();
+    }
+
+    for week in &[
+        "週一,",
+        "週二,",
+        "週三,",
+        "週四,",
+        "週五,",
+        "週六,",
+        "週日,",
+        "星期一,",
+        "星期二,",
+        "星期三,",
+        "星期四,",
+        "星期五,",
+        "星期六,",
+        "星期日,",
+    ] {
+        s = s.replace(week, "");
+    }
+
+    for (cn, num) in &[
+        ("十二月", "12"),
+        ("十一月", "11"),
+        ("十月", "10"),
+        ("九月", "09"),
+        ("八月", "08"),
+        ("七月", "07"),
+        ("六月", "06"),
+        ("五月", "05"),
+        ("四月", "04"),
+        ("三月", "03"),
+        ("二月", "02"),
+        ("一月", "01"),
+    ] {
+        s = s.replace(cn, num);
+    }
+
+    s = s.replace("　", " ");
+    s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    const FORMATS: &[&str] = &[
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%m %d, %Y",
+        "%m %e, %Y",
+        "%m %d %Y",
+        "%m %e %Y",
+        "%b %d, %Y",
+        "%b %e, %Y",
+        "%B %d, %Y",
+        "%B %e, %Y",
+        "%b %d %Y",
+        "%b %e %Y",
+        "%B %d %Y",
+        "%B %e %Y",
+        "%d %m %Y %H:%M",
+        "%d %m %Y",
+    ];
+
+    for &fmt in FORMATS {
+        if let Ok(dt) = NaiveDateTime::parse_from_str(&s, fmt) {
+            return Ok(DateTime::from_naive_utc_and_offset(dt, Utc));
+        }
+        if let Ok(d) = NaiveDate::parse_from_str(&s, fmt) {
+            return Ok(DateTime::from_naive_utc_and_offset(
+                d.and_hms_opt(0, 0, 0).unwrap(),
+                Utc,
+            ));
+        }
+    }
+
+    eprintln!("Warning: unable to parse '{}'", time_str);
+    Err(time_str.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_time_string() {
+        let cases = vec![
+            ("寫於2023-03-05 14:30:00", "2023-03-05T14:30:00+00:00"),
+            ("2023/03/05 14:30", "2023-03-05T14:30:00+00:00"),
+            ("2023-03-05", "2023-03-05T00:00:00+00:00"),
+            ("三月 5, 2023", "2023-03-05T00:00:00+00:00"),
+            ("March 5, 2023", "2023-03-05T00:00:00+00:00"),
+            ("5 3 2023 14:30", "2023-03-05T14:30:00+00:00"),
+            (" 週四, 28 十一月 2024 13:53", "2024-11-28T13:53:00+00:00"),
+        ];
+
+        for (input, expected) in cases {
+            let parsed = parse_time_string(input).expect("should parse");
+            assert_eq!(parsed.to_rfc3339(), expected);
+        }
+    }
 }

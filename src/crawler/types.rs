@@ -1,19 +1,18 @@
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CrawlerBasePost {
-    pub(crate) id: String,
     pub(crate) category: String,
     pub(crate) source_name: String,
     pub(crate) title: String,
     pub(crate) url: String,
-    pub(crate) time: String,
+    pub(crate) time: DateTime<Utc>,
     pub(crate) tags: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CrawledPost {
-    pub(crate) id: String,
     pub(crate) category: String,
     pub(crate) source_name: String,
     pub(crate) title: String,
@@ -21,7 +20,7 @@ pub struct CrawledPost {
     pub(crate) content: String,
     pub(crate) author_unit: String,
     pub(crate) attachments: Vec<String>,
-    pub(crate) time: String,
+    pub(crate) time: DateTime<Utc>,
     pub(crate) tags: Vec<String>,
 }
 

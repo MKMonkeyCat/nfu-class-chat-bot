@@ -255,13 +255,8 @@ impl Default for DiscordNotificationConfig {
                     inline: true,
                 },
                 DiscordFieldConfig {
-                    name: "公告連結".to_string(),
-                    value: "[點我開啟]({url})".to_string(),
-                    inline: true,
-                },
-                DiscordFieldConfig {
                     name: "標籤".to_string(),
-                    value: "{tags}".to_string(),
+                    value: "{tags|join ', '}".to_string(),
                     inline: true,
                 },
                 DiscordFieldConfig {
