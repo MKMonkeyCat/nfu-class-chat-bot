@@ -1,12 +1,9 @@
-FROM rust:1.93 AS builder
+FROM rust:1.93-bookworm AS builder
 WORKDIR /usr/src/app
 COPY . .
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-  --mount=type=cache,target=/app/target \
-  cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
 FROM debian:bookworm-slim
-# RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/class-chat-bot .
 EXPOSE 8080
