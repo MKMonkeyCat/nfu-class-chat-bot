@@ -71,6 +71,10 @@ pub struct CrawlerEntryConfig {
 
     /// 通知目標列表，指定要推播通知的頻道或平台（例如 Discord 頻道 ID）
     pub notify_targets: Vec<String>,
+
+    /// 當 LLM 判定 `is_relevant = true` 時，優先使用的通知目標列表
+    #[serde(default)]
+    pub notify_relevant_targets: Vec<String>,
 }
 
 impl Default for CrawlerEntryConfig {
@@ -85,6 +89,7 @@ impl Default for CrawlerEntryConfig {
             selectors: SelectionConfig::default(),
             sub_selectors: Some(SubSelectionConfig::default()),
             notify_targets: vec!["default".to_string()],
+            notify_relevant_targets: Vec::new(),
         }
     }
 }

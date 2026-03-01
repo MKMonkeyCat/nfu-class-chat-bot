@@ -3,6 +3,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use config::CrawlerEntryConfig;
 use scraper::{ElementRef, Html, Selector};
 use url::Url;
+use utils::app_timezone;
 
 use super::types::CrawledPost;
 
@@ -71,7 +72,7 @@ pub(crate) fn parse_base_posts(
             source_name,
             title,
             url,
-            time: parse_time_string(&time).unwrap_or_else(|_| Utc::now()),
+            time: parse_time_string(&time).unwrap_or_else(|_| app_timezone().now_utc()),
             tags,
         });
     }
@@ -189,6 +190,7 @@ fn absolutize_url(base: &str, target: &str) -> String {
 }
 
 fn parse_time_string(time_str: &str) -> Result<DateTime<Utc>, String> {
+    let tz = app_timezone();
     let mut s = time_str.trim().to_string();
 
     if let Some(rest) = s.strip_prefix("寫於") {
@@ -259,13 +261,16 @@ fn parse_time_string(time_str: &str) -> Result<DateTime<Utc>, String> {
 
     for &fmt in FORMATS {
         if let Ok(dt) = NaiveDateTime::parse_from_str(&s, fmt) {
-            return Ok(DateTime::from_naive_utc_and_offset(dt, Utc));
+            if let Some(utc) = tz.naive_local_to_utc(dt) {
+                return Ok(utc);
+            }
         }
         if let Ok(d) = NaiveDate::parse_from_str(&s, fmt) {
-            return Ok(DateTime::from_naive_utc_and_offset(
-                d.and_hms_opt(0, 0, 0).unwrap(),
-                Utc,
-            ));
+            if let Some(dt) = d.and_hms_opt(0, 0, 0)
+                && let Some(utc) = tz.naive_local_to_utc(dt)
+            {
+                return Ok(utc);
+            }
         }
     }
 
@@ -280,13 +285,13 @@ mod tests {
     #[test]
     fn test_parse_time_string() {
         let cases = vec![
-            ("寫於2023-03-05 14:30:00", "2023-03-05T14:30:00+00:00"),
-            ("2023/03/05 14:30", "2023-03-05T14:30:00+00:00"),
-            ("2023-03-05", "2023-03-05T00:00:00+00:00"),
-            ("三月 5, 2023", "2023-03-05T00:00:00+00:00"),
-            ("March 5, 2023", "2023-03-05T00:00:00+00:00"),
-            ("5 3 2023 14:30", "2023-03-05T14:30:00+00:00"),
-            (" 週四, 28 十一月 2024 13:53", "2024-11-28T13:53:00+00:00"),
+            ("寫於2023-03-05 14:30:00", "2023-03-05T06:30:00+00:00"),
+            ("2023/03/05 14:30", "2023-03-05T06:30:00+00:00"),
+            ("2023-03-05", "2023-03-04T16:00:00+00:00"),
+            ("三月 5, 2023", "2023-03-04T16:00:00+00:00"),
+            ("March 5, 2023", "2023-03-04T16:00:00+00:00"),
+            ("5 3 2023 14:30", "2023-03-05T06:30:00+00:00"),
+            (" 週四, 28 十一月 2024 13:53", "2024-11-28T05:53:00+00:00"),
         ];
 
         for (input, expected) in cases {

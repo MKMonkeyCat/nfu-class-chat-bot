@@ -128,7 +128,7 @@ pub(crate) fn build_discord_message(
             url: post.url.clone(),
             color: notification.discord.embed_color,
             fields,
-            footer: post.time.to_string(),
+            footer: post.time.format("%Y-%m-%d").to_string(),
         },
     }
 }

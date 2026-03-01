@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
+use utils::app_timezone;
 
 pub(crate) const FALLBACK_LOOP_SECONDS: u64 = 5;
 pub(crate) const SEEN_TTL_SECONDS: u64 = 7 * 24 * 60 * 60;
@@ -14,10 +15,14 @@ pub(crate) fn compute_next_run(cron_expr: &str, now: DateTime<Utc>) -> DateTime<
     }
 
     match cron::Schedule::from_str(cron_expr) {
-        Ok(schedule) => schedule
-            .after(&now)
-            .next()
-            .unwrap_or_else(|| now + chrono::Duration::seconds(60)),
+        Ok(schedule) => {
+            let local_now = app_timezone().utc_to_fixed_local(now);
+            schedule
+                .after(&local_now)
+                .next()
+                .map(|next| next.with_timezone(&Utc))
+                .unwrap_or_else(|| now + chrono::Duration::seconds(60))
+        }
         Err(_) => now + chrono::Duration::seconds(60),
     }
 }

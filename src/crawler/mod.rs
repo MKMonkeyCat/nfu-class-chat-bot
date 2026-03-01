@@ -239,7 +239,7 @@ async fn process_entry(
         }
 
         if !is_similar {
-            let targets = selected_notifications(entry, notifications);
+            let targets = selected_notifications(entry, notifications, llm_result.is_relevant);
             if targets.is_empty() {
                 println!(
                     "[crawler] {} skip notification for '{}' (target not matched)",
@@ -277,13 +277,19 @@ async fn process_entry(
 fn selected_notifications<'a>(
     entry: &CrawlerEntryConfig,
     notifications: &'a HashMap<String, NotificationConfig>,
+    is_relevant: bool,
 ) -> Vec<&'a NotificationConfig> {
-    if entry.notify_targets.is_empty() {
+    let target_ids = if is_relevant && !entry.notify_relevant_targets.is_empty() {
+        &entry.notify_relevant_targets
+    } else {
+        &entry.notify_targets
+    };
+
+    if target_ids.is_empty() {
         return notifications.values().filter(|n| n.enabled).collect();
     }
 
-    entry
-        .notify_targets
+    target_ids
         .iter()
         .filter_map(|target_id| notifications.get(target_id))
         .filter(|notification| notification.enabled)

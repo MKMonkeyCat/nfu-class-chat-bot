@@ -1,7 +1,7 @@
-use chrono::Utc;
 use config::CrawlerLlmConfig;
 use reqwest::Client;
 use serde_json::json;
+use utils::app_timezone;
 
 use super::types::{CrawledPost, LlmResult};
 
@@ -13,7 +13,7 @@ pub(crate) async fn call_llm(
     let api_key = std::env::var(&llm_cfg.api_key_env)
         .map_err(|_| format!("missing env: {}", llm_cfg.api_key_env))?;
 
-    let today_str = Utc::now().format("%Y-%m-%d").to_string();
+    let today_str = app_timezone().today_str();
     let prompt = build_prompt(
         &format!(
             "來源: {}\n標題: {}\n時間: {}\n連結: {}\n內容:\n{}",
