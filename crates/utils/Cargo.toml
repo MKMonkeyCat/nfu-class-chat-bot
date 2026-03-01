@@ -1,0 +1,18 @@
+[package]
+name = "utils"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+utils_derive = { path = "../utils_derive" }
+
+indexmap = { version = "2", optional = true }
+
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+
+[features]
+default = ["doc_reader", "template_string"]
+doc_reader = ["indexmap"]
+template_string = ["serde", "serde_json", "chrono"]

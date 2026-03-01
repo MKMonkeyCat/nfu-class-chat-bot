@@ -43,10 +43,13 @@ pub fn spawn_crawler(config: Arc<RwLock<CrawlerConfig>>, http: Arc<Http>, db: Da
             let now = Utc::now();
             for entry in &cfg.entries {
                 let key = format!("{}::{}", entry.name, entry.url);
-
                 let due = next_run.get(&key).cloned().unwrap_or(now);
                 if now < due {
                     continue;
+                }
+
+                if let Err(err) = crawler_prune_seen(&db, SEEN_TTL_SECONDS).await {
+                    eprintln!("[crawler] failed to prune seen keys: {}", err);
                 }
 
                 match process_entry(&reqwest, &http, &db, entry, &cfg.llm).await {
@@ -60,10 +63,6 @@ pub fn spawn_crawler(config: Arc<RwLock<CrawlerConfig>>, http: Arc<Http>, db: Da
                 }
 
                 next_run.insert(key, compute_next_run(&entry.cron, now));
-            }
-
-            if let Err(err) = crawler_prune_seen(&db, SEEN_TTL_SECONDS).await {
-                eprintln!("[crawler] failed to prune seen keys: {}", err);
             }
 
             tokio::time::sleep(Duration::from_secs(FALLBACK_LOOP_SECONDS)).await;

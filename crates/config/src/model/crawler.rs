@@ -1,5 +1,5 @@
-use doc_reader::DocReader;
 use serde::{Deserialize, Serialize};
+use utils::DocReader;
 
 /// 主爬蟲設定
 #[derive(Debug, Serialize, Deserialize, Clone, DocReader)]

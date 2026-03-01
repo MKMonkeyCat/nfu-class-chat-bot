@@ -1,6 +1,6 @@
-use doc_reader::DocReader;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utils::DocReader;
 
 /// 主應用程式設定
 #[derive(Debug, Serialize, Deserialize, Clone, DocReader)]

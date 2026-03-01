@@ -4,9 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = [".", "crates/entity", "crates/migration", "crates/config"]
+members = [
+  ".",
+  "crates/utils",
+  "crates/entity",
+  "crates/migration",
+  "crates/config",
+]
 
 [dependencies]
+utils = { path = "./crates/utils" }
 entity = { path = "./crates/entity" }
 migration = { path = "./crates/migration" }
 config = { path = "./crates/config" }

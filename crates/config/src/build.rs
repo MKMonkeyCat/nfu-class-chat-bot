@@ -1,6 +1,6 @@
-use doc_reader::{DocNode, DocReader};
 use serde::Serialize;
 use toml::Value;
+use utils::{DocNode, DocReader};
 
 fn build_toml_with_comments(node: &DocNode, value: &Value, path: Vec<String>) -> String {
     let mut output = String::new();

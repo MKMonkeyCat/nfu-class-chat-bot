@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-doc_reader = { path = "../doc_reader" }
+utils = { path = "../utils", features = ["doc_reader"] }
 indexmap = "2"
 
 config = "0.15"
