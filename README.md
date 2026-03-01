@@ -46,29 +46,29 @@ docker compose up -d --build
 
 `docker-compose.yml` 會掛載：
 
-- `./config.toml -> /app/config.toml`
-- `./db.db -> /app/db.db`
+- `./config -> /app/config`
+- `./data -> /app/data`
 
-## Kubernetes 部署
+其中 SQLite 會儲存到 `data/db.db`。
 
-已提供範例檔：`k8s/manifest.yaml`
+## Helm 部署
 
-部署前請先修改：
-
-- `Secret` 中的 `DISCORD_TOKEN`
-- `ConfigMap` 中的 `config.toml` 內容（角色 ID、LINE 憑證、群組對應）
-
-套用：
+本專案已提供 Helm chart：`charts/class-chat-bot`。
 
 ```bash
-kubectl apply -f k8s/manifest.yaml
+helm upgrade --install class-chat-bot ./charts/class-chat-bot
 ```
 
-查看狀態：
+預設設定：
 
-```bash
-kubectl get pods,svc -l app=class-chat-bot
-```
+- Service 對外 Port：`8080`（targetPort: `8080`）
+- `config` 掛載到 `/app/config`
+- `data` 掛載到 `/app/data`
+
+若要指定既有 PVC，可在 `values.yaml` 設定：
+
+- `persistence.config.existingClaim`
+- `persistence.data.existingClaim`
 
 ## 設定重點
 

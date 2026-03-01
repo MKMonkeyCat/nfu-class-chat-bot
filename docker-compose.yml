@@ -1,12 +1,11 @@
 services:
   app:
-    image: class-chat-bot
-    build: .
+    image: ghcr.io/mkmonkeycat/nfu-class-chat-bot:latest
     ports:
       - "8080:8080"
     env_file:
       - .env
     volumes:
-      - ./db.db:/app/db.db
-      - ./config.toml:/app/config.toml
+      - ./config:/app/config
+      - ./data:/app/data
     restart: unless-stopped
