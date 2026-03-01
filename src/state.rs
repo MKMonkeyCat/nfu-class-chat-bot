@@ -1,4 +1,4 @@
-use crate::app_config::AppConfig;
+use config::{AppConfig, CrawlerConfig};
 use sea_orm::DatabaseConnection;
 use serenity::prelude::{RwLock, TypeMapKey};
 use std::sync::Arc;
@@ -7,6 +7,12 @@ pub struct ConfigKey;
 
 impl TypeMapKey for ConfigKey {
     type Value = Arc<RwLock<AppConfig>>;
+}
+
+pub struct CrawlerKey;
+
+impl TypeMapKey for CrawlerKey {
+    type Value = Arc<RwLock<CrawlerConfig>>;
 }
 
 pub struct DbKey;

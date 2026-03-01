@@ -3,12 +3,12 @@ mod line_api;
 mod routing;
 mod types;
 
-use crate::app_config::AppConfig;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;
+use config::AppConfig;
 use serenity::all::Http;
 use serenity::prelude::RwLock;
 use std::sync::Arc;

@@ -1,8 +1,7 @@
+use crate::discord::{
+    DiscordDeliveryTarget, bad_gateway_from_error, is_missing_target_error, send_file, send_text,
+};
 use reqwest::StatusCode;
-use reqwest::multipart::{Form, Part};
-use serde_json::json;
-use serenity::all::ChannelId;
-use serenity::builder::{CreateAttachment, CreateMessage};
 
 use super::line_api::{fetch_line_content, infer_filename};
 use super::types::{DeliveryTarget, LinkChatState};
@@ -14,39 +13,28 @@ pub(super) async fn send_text_to_discord(
     webhook_username: Option<&str>,
     webhook_avatar_override: Option<&str>,
 ) -> Result<(), StatusCode> {
-    if !target.discord_webhook_url.is_empty() {
-        let response = state
-            .reqwest
-            .post(&target.discord_webhook_url)
-            .json(&json!({
-                "content": content,
-                "username": webhook_username,
-                "avatar_url": if let Some(avatar) = webhook_avatar_override {
-                    Some(avatar.to_string())
-                } else if target.discord_webhook_avatar_url.is_empty() {
-                    None::<String>
-                } else {
-                    Some(target.discord_webhook_avatar_url.clone())
-                },
-            }))
-            .send()
-            .await
-            .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let delivery_target = DiscordDeliveryTarget {
+        channel_id: target.discord_channel_id,
+        webhook_url: target.discord_webhook_url.clone(),
+        webhook_avatar_url: target.discord_webhook_avatar_url.clone(),
+    };
 
-        if !response.status().is_success() {
-            return Err(StatusCode::BAD_GATEWAY);
+    send_text(
+        &state.reqwest,
+        &state.http,
+        &delivery_target,
+        content,
+        webhook_username,
+        webhook_avatar_override,
+    )
+    .await
+    .map_err(|error| {
+        if is_missing_target_error(&error) {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            bad_gateway_from_error(&error)
         }
-        return Ok(());
-    }
-
-    if target.discord_channel_id == 0 {
-        return Err(StatusCode::SERVICE_UNAVAILABLE);
-    }
-
-    ChannelId::new(target.discord_channel_id)
-        .say(&state.http, content)
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    })?;
 
     Ok(())
 }
@@ -78,53 +66,30 @@ pub(super) async fn send_content_to_discord(
 
     let filename = infer_filename(default_filename, &content_type);
 
-    if !target.discord_webhook_url.is_empty() {
-        let payload_json = json!({
-            "content": caption,
-            "username": webhook_username,
-            "avatar_url": if let Some(avatar) = webhook_avatar_override {
-                Some(avatar.to_string())
-            } else if target.discord_webhook_avatar_url.is_empty() {
-                None::<String>
-            } else {
-                Some(target.discord_webhook_avatar_url.clone())
-            },
-        })
-        .to_string();
+    let delivery_target = DiscordDeliveryTarget {
+        channel_id: target.discord_channel_id,
+        webhook_url: target.discord_webhook_url.clone(),
+        webhook_avatar_url: target.discord_webhook_avatar_url.clone(),
+    };
 
-        let file_part = Part::bytes(bytes).file_name(filename);
-        let form = Form::new()
-            .text("payload_json", payload_json)
-            .part("files[0]", file_part);
-
-        let response = state
-            .reqwest
-            .post(&target.discord_webhook_url)
-            .multipart(form)
-            .send()
-            .await
-            .map_err(|_| StatusCode::BAD_GATEWAY)?;
-
-        if !response.status().is_success() {
-            return Err(StatusCode::BAD_GATEWAY);
+    send_file(
+        &state.reqwest,
+        &state.http,
+        &delivery_target,
+        bytes,
+        filename,
+        &caption,
+        webhook_username,
+        webhook_avatar_override,
+    )
+    .await
+    .map_err(|error| {
+        if is_missing_target_error(&error) {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            bad_gateway_from_error(&error)
         }
-
-        return Ok(());
-    }
-
-    if target.discord_channel_id == 0 {
-        return Err(StatusCode::SERVICE_UNAVAILABLE);
-    }
-
-    let attachment = CreateAttachment::bytes(bytes, filename);
-    ChannelId::new(target.discord_channel_id)
-        .send_files(
-            &state.http,
-            vec![attachment],
-            CreateMessage::new().content(caption),
-        )
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    })?;
 
     Ok(())
 }

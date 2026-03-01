@@ -14,6 +14,7 @@
 
 - Rust 1.93+
 - Discord Bot Token（環境變數 `DISCORD_TOKEN`）
+- 時區可由環境變數 `TZ` 指定（預設 `Asia/Taipei`，即 UTC+8）
 - `config.toml`（可由 `config.example.toml` 複製）
 
 ## 本機啟動
@@ -28,6 +29,7 @@
 
    ```env
    DISCORD_TOKEN=your_discord_bot_token
+   TZ=Asia/Taipei
    ```
 
 3. 執行

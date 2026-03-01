@@ -1,4 +1,4 @@
-use crate::app_config::AppConfig;
+use config::AppConfig;
 use reqwest::Client;
 use serde::Deserialize;
 use serenity::all::Http;
