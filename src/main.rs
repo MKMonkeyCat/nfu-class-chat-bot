@@ -1,6 +1,7 @@
 mod crawler;
 mod db;
 mod discord;
+mod google_calendar;
 mod leader_election;
 mod link_chat;
 mod state;

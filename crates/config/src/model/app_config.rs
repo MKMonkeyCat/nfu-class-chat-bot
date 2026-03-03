@@ -111,9 +111,9 @@ impl Default for LinkChatConfig {
                 discord_channel_id: 1234567890123456789,
                 discord_webhook_url: String::new(),
                 discord_webhook_avatar_url: String::new(),
-                message_template: "{name} ({group}): {message}".to_string(),
+                message_template: "{name} ({group_name}): {message}".to_string(),
                 webhook_avatar_url: String::new(),
-                webhook_name_template: "{name} ({group})".to_string(),
+                webhook_name_template: "{name} ({group_name})".to_string(),
                 webhook_message_template: "{message}".to_string(),
             },
         );

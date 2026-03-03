@@ -150,8 +150,14 @@ where
     T: Default + Serialize + DocReader,
 {
     let default_instance = T::default();
-    let root_node = T::get_recursive_docs();
-
     let toml_value = Value::try_from(&default_instance).expect("Failed to convert to TOML value");
-    build_toml_with_comments(&root_node, &toml_value, Vec::new())
+    generate_toml_with_comments_from_value::<T>(&toml_value)
+}
+
+pub fn generate_toml_with_comments_from_value<T>(toml_value: &Value) -> String
+where
+    T: DocReader,
+{
+    let root_node = T::get_recursive_docs();
+    build_toml_with_comments(&root_node, toml_value, Vec::new())
 }

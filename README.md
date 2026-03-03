@@ -75,6 +75,19 @@ helm upgrade --install class-chat-bot ./charts/class-chat-bot
 - Bot 啟動時會讀取 `config.toml`
 - 啟動後會監聽檔案變更並熱更新
 - LINE Webhook 入口預設為 `POST /line/webhook`
+- 可在 `config/crawlers.toml` 的 `[google_calendar]` 啟用 Google Calendar（服務帳戶）同步
+
+## Google Calendar（服務帳戶）
+
+1. 在 Google Cloud 建立 Service Account 並啟用 Calendar API。
+2. 下載 Service Account JSON，放到 `config/google-service-account.json`（或自訂路徑）。
+3. 將私人行事曆「分享給服務帳戶 email」（至少讀取權限）。
+4. 在 `config/crawlers.toml` 設定：
+   - `[google_calendar].enabled = true`
+   - `service_account_json_path`
+   - `[[google_calendar.calendars]]` 的 `calendar_id` 與 `enabled = true`
+
+啟用後，Bot 會定期抓取未來活動並推播到通知目標，且同一活動只會推播一次。
 
 ## 指令
 

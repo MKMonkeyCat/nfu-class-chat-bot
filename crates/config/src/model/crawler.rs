@@ -20,6 +20,10 @@ pub struct CrawlerConfig {
     #[serde(default = "default_notifications")]
     pub notifications: HashMap<String, NotificationConfig>,
 
+    /// Google Calendar 同步設定（服務帳戶）
+    #[serde(default)]
+    pub google_calendar: GoogleCalendarConfig,
+
     /// 各個爬蟲入口的設定
     pub entries: Vec<CrawlerEntryConfig>,
 }
@@ -37,7 +41,76 @@ impl Default for CrawlerConfig {
             global_user_agent: "NFU-Bot/1.0 (Github:MKMonkeyCat/nfu-class-chat-bot)".to_string(),
             llm: CrawlerLlmConfig::default(),
             notifications: default_notifications(),
+            google_calendar: GoogleCalendarConfig::default(),
             entries: vec![CrawlerEntryConfig::default()],
+        }
+    }
+}
+
+/// Google Calendar 同步設定（服務帳戶）
+#[derive(Debug, Serialize, Deserialize, Clone, DocReader)]
+#[serde(default)]
+pub struct GoogleCalendarConfig {
+    /// 是否啟用 Google Calendar 同步
+    pub enabled: bool,
+
+    /// 同步輪詢間隔（秒）
+    pub poll_interval_seconds: u64,
+
+    /// 查詢未來幾小時的活動
+    pub lookahead_hours: u64,
+
+    /// 每個日曆單次最多抓取幾筆活動
+    pub max_results: u32,
+
+    /// 服務帳戶 JSON 憑證路徑
+    pub service_account_json_path: String,
+
+    /// 預設通知目標（對應 notifications 的 key）
+    pub notify_targets: Vec<String>,
+
+    /// 要同步的日曆列表
+    pub calendars: Vec<GoogleCalendarEntryConfig>,
+}
+
+impl Default for GoogleCalendarConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            poll_interval_seconds: 300,
+            lookahead_hours: 168,
+            max_results: 50,
+            service_account_json_path: "config/google-service-account.json".to_string(),
+            notify_targets: vec!["default".to_string()],
+            calendars: vec![GoogleCalendarEntryConfig::default()],
+        }
+    }
+}
+
+/// 單一 Google Calendar 來源設定
+#[derive(Debug, Serialize, Deserialize, Clone, DocReader)]
+#[serde(default)]
+pub struct GoogleCalendarEntryConfig {
+    /// 顯示名稱
+    pub name: String,
+
+    /// 是否啟用
+    pub enabled: bool,
+
+    /// Google Calendar ID（例如 abc123@group.calendar.google.com）
+    pub calendar_id: String,
+
+    /// 覆寫通知目標（留空會沿用 google_calendar.notify_targets）
+    pub notify_targets: Vec<String>,
+}
+
+impl Default for GoogleCalendarEntryConfig {
+    fn default() -> Self {
+        Self {
+            name: "NFU 私人行事曆".to_string(),
+            enabled: false,
+            calendar_id: "example@group.calendar.google.com".to_string(),
+            notify_targets: Vec::new(),
         }
     }
 }

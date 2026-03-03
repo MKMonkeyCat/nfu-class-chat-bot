@@ -4,6 +4,7 @@ pub(crate) struct DiscordDeliveryTarget {
     pub(crate) webhook_avatar_url: String,
 }
 
+#[derive(Clone)]
 pub(crate) struct DiscordEmbedField {
     pub(crate) name: String,
     pub(crate) value: String,
