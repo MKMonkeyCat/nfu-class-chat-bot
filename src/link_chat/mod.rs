@@ -131,8 +131,9 @@ async fn line_webhook_handler(
     }
 
     println!(
-        "[link-chat] received webhook: content_length={} bytes",
-        body.len()
+        "[link-chat] received webhook: content_length={} bytes payload={:?}",
+        body.len(),
+        body
     );
 
     let payload: LineWebhookPayload =
