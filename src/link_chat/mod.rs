@@ -6,12 +6,16 @@ mod types;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::post;
 use config::AppConfig;
 use serenity::all::Http;
 use serenity::prelude::RwLock;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use discord::{send_content_to_discord, send_text_to_discord};
 use line_api::{
@@ -20,6 +24,49 @@ use line_api::{
 };
 use routing::{TemplateContext, render_message_text, render_webhook_name, resolve_target};
 use types::{LineMessage, LineSource, LineWebhookPayload, LinkChatState};
+
+static REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn next_request_id() -> String {
+    let seq = REQUEST_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("linkchat-{}", seq)
+}
+
+async fn request_log_middleware(mut req: Request<axum::body::Body>, next: Next) -> Response {
+    let start = Instant::now();
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let request_id = req
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(next_request_id);
+
+    if let Ok(v) = HeaderValue::from_str(&request_id) {
+        req.headers_mut().insert("x-request-id", v);
+    }
+
+    let mut response = next.run(req).await;
+    let status = response.status();
+    let elapsed_ms = start.elapsed().as_millis();
+
+    if let Ok(v) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert("x-request-id", v);
+    }
+
+    println!(
+        "[link-chat][req] id={} method={} path={} status={} latency_ms={}",
+        request_id,
+        method,
+        path,
+        status.as_u16(),
+        elapsed_ms
+    );
+
+    response
+}
 
 pub fn spawn_line_to_discord_bridge(config: Arc<RwLock<AppConfig>>, http: Arc<Http>) {
     tokio::spawn(async move {
@@ -32,6 +79,7 @@ pub fn spawn_line_to_discord_bridge(config: Arc<RwLock<AppConfig>>, http: Arc<Ht
 
         let app = Router::new()
             .route("/line/webhook", post(line_webhook_handler))
+            .layer(middleware::from_fn(request_log_middleware))
             .with_state(state);
 
         let listener = match tokio::net::TcpListener::bind(&bind_addr).await {
@@ -81,6 +129,11 @@ async fn line_webhook_handler(
         eprintln!("[link-chat] signature verification failed");
         return Err(StatusCode::UNAUTHORIZED);
     }
+
+    println!(
+        "[link-chat] received webhook: content_length={} bytes",
+        body.len()
+    );
 
     let payload: LineWebhookPayload =
         serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
