@@ -105,7 +105,7 @@ pub(super) async fn get_group_member_profile(
     user_id: &str,
 ) -> Result<MemberProfile, String> {
     let url = format!(
-        "https://api.line.me/v2/bot/group/{}/member/{}/profile",
+        "https://api.line.me/v2/bot/group/{}/member/{}",
         group_id, user_id
     );
 
@@ -138,7 +138,7 @@ pub(super) async fn get_room_member_profile(
     user_id: &str,
 ) -> Result<MemberProfile, String> {
     let url = format!(
-        "https://api.line.me/v2/bot/room/{}/member/{}/profile",
+        "https://api.line.me/v2/bot/room/{}/member/{}",
         room_id, user_id
     );
 
