@@ -27,6 +27,26 @@ use types::{LineMessage, LineSource, LineWebhookPayload, LinkChatState};
 
 static REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
 
+fn make_template_context<'a>(
+    sender_name: &'a str,
+    avatar: &'a str,
+    user_id: &'a str,
+    group_name: &'a str,
+    source_id: &'a str,
+    message: &'a str,
+    timestamp: chrono::DateTime<chrono::Utc>,
+) -> TemplateContext<'a> {
+    TemplateContext {
+        name: sender_name,
+        avatar,
+        user_id,
+        group_name,
+        group_id: source_id,
+        message,
+        timestamp,
+    }
+}
+
 fn next_request_id() -> String {
     let seq = REQUEST_SEQ.fetch_add(1, Ordering::Relaxed);
     format!("linkchat-{}", seq)
@@ -285,6 +305,9 @@ async fn line_webhook_handler(
             continue;
         };
 
+        let sender_user_id = event.source.sender_user_id().unwrap_or("");
+        let avatar_for_template = profile_avatar_url.as_deref().unwrap_or("");
+
         match message {
             LineMessage::Text { text } => {
                 let event_time = if event.timestamp > 0 {
@@ -293,15 +316,15 @@ async fn line_webhook_handler(
                 } else {
                     chrono::Utc::now()
                 };
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: &text,
-                    timestamp: event_time,
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    &text,
+                    event_time,
+                );
 
                 let content = render_message_text(&target, &context);
                 let webhook_name = render_webhook_name(&target, &context);
@@ -314,17 +337,63 @@ async fn line_webhook_handler(
                 )
                 .await?;
             }
-            LineMessage::Image { message_id } => {
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: "",
-                    timestamp: chrono::Utc::now(),
-                };
+            LineMessage::Image {
+                message_id,
+                image_set,
+            } => {
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    "",
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
+
+                if let Some(image_set) = image_set {
+                    if !image_set.id.is_empty()
+                        && image_set.total > 1
+                        && image_set.index > 0
+                        && !message_id.is_empty()
+                    {
+                        let maybe_message_ids = state
+                            .add_image_set_message(
+                                &source_id,
+                                &image_set.id,
+                                image_set.index,
+                                image_set.total,
+                                message_id,
+                            )
+                            .await;
+
+                        if let Some(message_ids) = maybe_message_ids {
+                            for (idx, image_message_id) in message_ids.iter().enumerate() {
+                                let caption = if idx == 0 {
+                                    format!("[LINE 圖片組，共 {} 張]", image_set.total)
+                                } else {
+                                    String::new()
+                                };
+
+                                send_content_to_discord(
+                                    &state,
+                                    &target,
+                                    &link_chat_cfg.line_channel_access_token,
+                                    image_message_id,
+                                    caption,
+                                    format!("line_imageset_{}_{}.jpg", image_set.id, idx + 1),
+                                    webhook_name.as_deref(),
+                                    profile_avatar_url.as_deref(),
+                                )
+                                .await?;
+                            }
+                        }
+
+                        continue;
+                    }
+                }
+
                 send_content_to_discord(
                     &state,
                     &target,
@@ -338,15 +407,15 @@ async fn line_webhook_handler(
                 .await?;
             }
             LineMessage::Video { message_id } => {
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: "",
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    "",
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_content_to_discord(
                     &state,
@@ -361,15 +430,15 @@ async fn line_webhook_handler(
                 .await?;
             }
             LineMessage::Audio { message_id } => {
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: "",
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    "",
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_content_to_discord(
                     &state,
@@ -392,15 +461,15 @@ async fn line_webhook_handler(
                 } else {
                     file_name
                 };
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: "",
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    "",
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_content_to_discord(
                     &state,
@@ -421,15 +490,15 @@ async fn line_webhook_handler(
                 longitude,
             } => {
                 let text = format!("[位置] {} {} ({}, {})", title, address, latitude, longitude);
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: &text,
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    &text,
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_text_to_discord(
                     &state,
@@ -445,15 +514,15 @@ async fn line_webhook_handler(
                 sticker_resource_type,
             } => {
                 let preview = build_sticker_preview_url(&sticker_id, &sticker_resource_type);
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: &preview,
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    &preview,
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_text_to_discord(
                     &state,
@@ -466,15 +535,15 @@ async fn line_webhook_handler(
             }
             LineMessage::Unknown => {
                 let text = "[未知訊息型別]";
-                let context = TemplateContext {
-                    name: &sender_name,
-                    avatar: profile_avatar_url.as_deref().unwrap_or(""),
-                    user_id: event.source.sender_user_id().unwrap_or(""),
-                    group_name: &group_name,
-                    group_id: &source_id,
-                    message: text,
-                    timestamp: chrono::Utc::now(),
-                };
+                let context = make_template_context(
+                    &sender_name,
+                    avatar_for_template,
+                    sender_user_id,
+                    &group_name,
+                    &source_id,
+                    text,
+                    chrono::Utc::now(),
+                );
                 let webhook_name = render_webhook_name(&target, &context);
                 send_text_to_discord(
                     &state,

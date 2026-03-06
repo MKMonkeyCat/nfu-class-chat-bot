@@ -22,6 +22,7 @@ pub(super) struct LinkChatState {
     pub(super) profile_cache: Arc<TokioRwLock<HashMap<String, CacheEntry<MemberProfile>>>>,
     pub(super) group_name_cache: Arc<TokioRwLock<HashMap<String, CacheEntry<String>>>>,
     pub(super) room_name_cache: Arc<TokioRwLock<HashMap<String, CacheEntry<String>>>>,
+    pub(super) image_set_cache: Arc<TokioRwLock<HashMap<String, CacheEntry<PendingImageSet>>>>,
 }
 
 impl LinkChatState {
@@ -33,6 +34,7 @@ impl LinkChatState {
             profile_cache: Arc::new(TokioRwLock::new(HashMap::new())),
             group_name_cache: Arc::new(TokioRwLock::new(HashMap::new())),
             room_name_cache: Arc::new(TokioRwLock::new(HashMap::new())),
+            image_set_cache: Arc::new(TokioRwLock::new(HashMap::new())),
         }
     }
 
@@ -105,9 +107,71 @@ impl LinkChatState {
         );
     }
 
+    pub(super) async fn add_image_set_message(
+        &self,
+        source_id: &str,
+        image_set_id: &str,
+        index: u32,
+        total: u32,
+        message_id: String,
+    ) -> Option<Vec<String>> {
+        if source_id.is_empty() || image_set_id.is_empty() || total <= 1 {
+            return None;
+        }
+
+        let ttl = self.cache_ttl().await;
+        let key = format!("{}:{}", source_id, image_set_id);
+        let mut cache = self.image_set_cache.write().await;
+        let now = Instant::now();
+
+        cache.retain(|_, entry| entry.expires_at > now);
+
+        let entry = cache.entry(key.clone()).or_insert_with(|| CacheEntry {
+            value: PendingImageSet::new(total),
+            expires_at: now + ttl,
+        });
+
+        if entry.value.total != total {
+            entry.value = PendingImageSet::new(total);
+        }
+
+        entry.expires_at = now + ttl;
+        entry.value.items.insert(index, message_id);
+
+        if entry.value.items.len() != total as usize {
+            return None;
+        }
+
+        let mut ordered_ids = Vec::with_capacity(total as usize);
+        for i in 1..=total {
+            let Some(id) = entry.value.items.get(&i) else {
+                return None;
+            };
+            ordered_ids.push(id.clone());
+        }
+
+        cache.remove(&key);
+        Some(ordered_ids)
+    }
+
     async fn cache_ttl(&self) -> Duration {
         let cfg = self.config.read().await;
         Duration::from_secs(cfg.link_chat.cache_ttl_seconds.max(1))
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct PendingImageSet {
+    total: u32,
+    items: HashMap<u32, String>,
+}
+
+impl PendingImageSet {
+    fn new(total: u32) -> Self {
+        Self {
+            total,
+            items: HashMap::new(),
+        }
     }
 }
 
@@ -213,6 +277,8 @@ pub(super) enum LineMessage {
     Image {
         #[serde(default, rename = "id")]
         message_id: String,
+        #[serde(default, rename = "imageSet")]
+        image_set: Option<LineImageSet>,
     },
     Video {
         #[serde(default, rename = "id")]
@@ -248,6 +314,16 @@ pub(super) enum LineMessage {
     },
     #[serde(other)]
     Unknown,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub(super) struct LineImageSet {
+    #[serde(default)]
+    pub(super) id: String,
+    #[serde(default)]
+    pub(super) index: u32,
+    #[serde(default)]
+    pub(super) total: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
