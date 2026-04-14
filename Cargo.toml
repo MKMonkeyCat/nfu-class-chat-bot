@@ -61,7 +61,7 @@ url = "2.5.7"
 cron = "0.15.0"
 
 ahash = "0.8"
-rand = "0.8"
+rand = "0.9"
 jieba-rs = { version = "0.8", features = ["tfidf", "textrank"] }
 
 [profile.dev]
